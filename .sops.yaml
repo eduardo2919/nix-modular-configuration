@@ -1,0 +1,7 @@
+keys:
+  - &alan ge1y7ewnjc95kf93kzjwu04mfxrleahawxn9eafyyntdv36k4fck52qz8wgyh
+creation_rules:
+  - path_regex: archivos/config/.*\.json$
+    key_groups:
+      - age:
+          - *alan
