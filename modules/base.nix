@@ -1,5 +1,5 @@
 { config, pkgs, vars, ... }:
-{  
+{
   # Cuenta de usuario.
   users.mutableUsers = true;
   security.sudo.wheelNeedsPassword = true;
@@ -7,16 +7,15 @@
   users.users."alan" = {
     isNormalUser = true;
     description = "Alan Eduardo";
-    extraGroups = [ "networkmanager" "wheel" "input"];
+    # Quité "input": ese grupo puede leer /dev/input/* (todos los teclados
+    # y ratones del sistema), no hace falta para uso normal.
+    extraGroups = [ "networkmanager" "wheel" ];
     packages = with pkgs; [
       # Paquetes para el usuario "alan"
     ];
   };
 
-  imports =[../hosts/fiduardo/hardware-configuration.nix];
-
   # Bootloader
-  boot.initrd.luks.devices."luks-573cb347-ee82-4ace-a8cc-ab3414216ca1".device = "/dev/disk/by-uuid/573cb347-ee82-4ace-a8cc-ab3414216ca1";
   boot.loader.systemd-boot.enable = true;
   boot.loader.systemd-boot.editor = false;
   boot.loader.timeout = 3;
@@ -37,10 +36,11 @@
   };
 
   # Internet
-  networking.hostName = "fiduardo"; 
+  networking.hostName = vars.hostname;
   networking.networkmanager.enable = true;
   networking.firewall.enable = true;
   networking.firewall.logRefusedConnections = false;
+  networking.firewall.allowedTCPPorts = [ 6767 ];
 
   # Kernel
   boot.kernelPackages = pkgs.linuxPackages_latest;
@@ -52,9 +52,13 @@
     "net.ipv6.conf.all.accept_redirects" = 0;
     "kernel.kptr_restrict" = 2;
     "kernel.dmesg_restrict" = 1;
-    "kernel.yama.ptrace_scope" = 2;
-    "kernel.unprivileged_userns_clone" = 1;
+    # 2 bloquea gdb/strace incluso para procesos propios; 1 (el default de
+    # Yama) ya evita que un proceso normal escanee la memoria de otro.
+    "kernel.yama.ptrace_scope" = 1;
   };
+  # "kernel.unprivileged_userns_clone" no existe en el kernel mainline
+  # (es un parche de Debian/Zen); en NixOS lo controla
+  # security.unprivilegedUsernsClone, que ya viene en true por omisión.
 
   # Apps:
   nixpkgs.config.allowUnfree = true;
@@ -68,7 +72,7 @@
     curl
     tree
     tmux
-    fastfetch    
+    fastfetch
     unzip
     unrar
     ffmpeg
@@ -102,8 +106,12 @@
     dates = "03:00";
     randomizedDelaySec = "45min";
     allowReboot = false;
-    flags = [ "--print-build-logs" ];
-  }; 
+    # Sin "flake" intenta usar canales, que este sistema no tiene, y falla.
+    # Apunta al propio /etc/nixos (mismo repo que ya usas para el switch manual).
+    flake = "/etc/nixos#" + vars.hostname;
+    # --update-input está deprecado mas sigue funcionando: solo avisa.
+    flags = [ "--print-build-logs" "--update-input" "nixpkgs" ];
+  };
 
   # Flakes y mrds
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
@@ -113,7 +121,7 @@
     enable = true;
     libraries = with pkgs; [
       # se van agregando aquí según lo que te vaya faltando
-      
+
     ];
   };
 
@@ -142,23 +150,33 @@
   systemd.oomd.enable = true;
   systemd.oomd.enableRootSlice = true;
   systemd.oomd.enableUserSlices = true;
-  powerManagement.cpuFreqGovernor = "schedutil";
+  # cpuFreqGovernor se quitó de aquí: en el escritorio TLP ya lo pisa, y en
+  # intel_pstate (que es tu driver) "schedutil" ni siquiera es un gobernador
+  # disponible. Si algún host lo necesita, decláralo en su propio módulo.
 
   # Direnv
   programs.direnv.enable = true;
 
   # fstrim: para mantener el sistema de archivos optimizado y mejorar el rendimiento del almacenamiento.
   services.fstrim.enable = true;
-  
+
   # Auditorias de seguridad: para monitorear y registrar eventos de seguridad en el sistema.
   security.audit.enable = true;
   security.auditd.enable = true;
+  # Sin reglas, security.audit no registra nada útil todavía; agrega
+  # security.audit.rules cuando decidas qué syscalls/paths vigilar.
 
   # AppArmor: para mejorar la seguridad del sistema mediante el control de acceso a aplicaciones y procesos.
   security.apparmor = {
     enable = true;
     killUnconfinedConfinables = false;
   };
+
+  # Disko se quitó de aquí: no está en tus inputs, chocaría con
+  # hardware-configuration.nix (ambos definirían fileSystems), mezclaba una
+  # partición EF02/GRUB con systemd-boot, y como base.nix es común se
+  # aplicaría a los dos equipos. Disko es para *instalar*: si lo quieres,
+  # va en un archivo aparte por host, fuera de la config que corre a diario.
 
   # NUNCA cambiar:
   system.stateVersion = "26.05"; # ¿Leíste el comentario?

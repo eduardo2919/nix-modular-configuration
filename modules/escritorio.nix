@@ -10,6 +10,21 @@
     extest.enable = true;
   };
 
+  # Wayldroid
+  virtualisation.waydroid.enable = true;
+  virtualisation.waydroid.package = pkgs.waydroid-nftables;
+
+  environment.systemPackages = with pkgs; [
+    wl-clipboard
+    waydroid-helper
+    android-tools   # adb
+  ];
+
+  # waydroid-helper
+  systemd.packages = [ pkgs.waydroid-helper ];
+  systemd.services.waydroid-mount.wantedBy = [ "multi-user.target" ];
+  systemd.user.services.waydroid-monitor.wantedBy = [ "graphical-session.target" ];
+
   # GNOME DE
   services.displayManager.gdm.enable = true;
   services.desktopManager.gnome.enable = true;
@@ -63,11 +78,20 @@
       # Wi-Fi
       WIFI_PWR_ON_BAT = "on";
 
-      # Battery charge limits
+      # Battery charge limits: solo aplican si tu hardware los soporta.
+      # Compruébalo con `tlp-stat -b` tras el primer switch.
       START_CHARGE_THRESH_BAT0 = 40;
       STOP_CHARGE_THRESH_BAT0 = 80;
     };
   };
+
+  # Mullvad
+  services.mullvad-vpn = {
+    enable = true;
+    package = pkgs.mullvad-vpn;
+  };
+  services.resolved.enable = true;
+  networking.firewall.checkReversePath = "loose";
 
   # localSend: para compartir archivos de manera segura y rápida en la red local.
   programs.localsend.enable = true;

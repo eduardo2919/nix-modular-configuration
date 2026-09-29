@@ -1,5 +1,5 @@
-# hosts/fiduardo/variables.nix
 {
-  hostName = "fiduardo";
+  hostname = "fiduardo";
+  isDesktop = true;
   isServer = false;
 }
