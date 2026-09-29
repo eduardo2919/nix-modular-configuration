@@ -20,12 +20,20 @@
 
   outputs = { self, nixpkgs, home-manager, sops-nix, nix-flatpak, nix-vscode-extensions, ... }:
     let
+      inherit (nixpkgs) lib;
       system = "x86_64-linux";
-      mkHost = hostName: extraModules:
+
+      defaultVars = hostName: {
+        hostname = hostName;
+        isDesktop = false;
+        isServer = false;
+      };
+
+      mkHost = hostName:
         let
-          vars = import ./hosts/${hostName}/variables.nix;
+          vars = defaultVars hostName // import ./hosts/${hostName}/variables.nix;
         in
-        nixpkgs.lib.nixosSystem {
+        lib.nixosSystem {
           inherit system;
           specialArgs = { inherit vars; };
           modules = [
@@ -37,18 +45,26 @@
             {
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
+              # Si ya existe un archivo real donde HM quiere poner un enlace,
+              # lo renombra a *.hm-bak en vez de abortar el switch.
+              home-manager.backupFileExtension = "hm-bak";
               home-manager.users.alan = import ./modules/home.nix;
               home-manager.extraSpecialArgs = {
                 inherit vars;
                 vscodeExts = nix-vscode-extensions.extensions.${system}.open-vsx;
               };
             }
-          ] ++ extraModules;
+          ]
+          # El rol de cada equipo lo deciden los flags de su variables.nix
+          ++ lib.optional vars.isDesktop ./modules/escritorio.nix
+          ++ lib.optional vars.isServer ./modules/server.nix;
         };
-    in {
-      nixosConfigurations = {
-        fiduardo = mkHost "fiduardo" [ ./modules/escritorio.nix ];
-        inspiron3048 = mkHost "inspiron3048" [ ./modules/servidor.nix ];
-      };
+
+      # Cada carpeta dentro de hosts/ es un host: agregar un PC = crear hosts/<nombre>/
+      hosts = builtins.attrNames
+        (lib.filterAttrs (_: type: type == "directory") (builtins.readDir ./hosts));
+    in
+    {
+      nixosConfigurations = lib.genAttrs hosts mkHost;
     };
 }

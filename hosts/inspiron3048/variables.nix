@@ -1,5 +1,6 @@
 # hosts/inspiron3048/variables.nix
 {
-  hostName = "inspiron3048";
+  hostname = "inspiron3048";
+  isDesktop = false;
   isServer = true;
 }
