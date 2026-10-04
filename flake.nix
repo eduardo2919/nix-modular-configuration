@@ -1,5 +1,5 @@
 {
-  description = "Configuración flakes global de fiduardo";
+  description = "Configuración flake de esta máquina";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
@@ -11,6 +11,10 @@
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    disko = {
+      url = "github:nix-community/disko";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     nix-flatpak.url = "github:gmodena/nix-flatpak";
     nix-vscode-extensions = {
       url = "github:nix-community/nix-vscode-extensions";
@@ -18,53 +22,48 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nix-flatpak, nix-vscode-extensions, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, disko, nix-flatpak, nix-vscode-extensions, ... }:
     let
       inherit (nixpkgs) lib;
       system = "x86_64-linux";
 
-      defaultVars = hostName: {
-        hostname = hostName;
-        isDesktop = false;
-        isServer = false;
+      # Valores por omisión, por si variables.nix no define algo
+      defaultVars = {
+        usuario = "alan";
+        esLaptop = false;
+        entornoEscritorio = null;
+        gaming = false;
+        androidApps = false;
       };
-
-      mkHost = hostName:
-        let
-          vars = defaultVars hostName // import ./hosts/${hostName}/variables.nix;
-        in
-        lib.nixosSystem {
-          inherit system;
-          specialArgs = { inherit vars; };
-          modules = [
-            ./hosts/${hostName}/hardware-configuration.nix
-            ./modules/base.nix
-            sops-nix.nixosModules.sops
-            nix-flatpak.nixosModules.nix-flatpak
-            home-manager.nixosModules.home-manager
-            {
-              home-manager.useGlobalPkgs = true;
-              home-manager.useUserPackages = true;
-              # Si ya existe un archivo real donde HM quiere poner un enlace,
-              # lo renombra a *.hm-bak en vez de abortar el switch.
-              home-manager.backupFileExtension = "hm-bak";
-              home-manager.users.alan = import ./modules/home.nix;
-              home-manager.extraSpecialArgs = {
-                inherit vars;
-                vscodeExts = nix-vscode-extensions.extensions.${system}.open-vsx;
-              };
-            }
-          ]
-          # El rol de cada equipo lo deciden los flags de su variables.nix
-          ++ lib.optional vars.isDesktop ./modules/escritorio.nix
-          ++ lib.optional vars.isServer ./modules/server.nix;
-        };
-
-      # Cada carpeta dentro de hosts/ es un host: agregar un PC = crear hosts/<nombre>/
-      hosts = builtins.attrNames
-        (lib.filterAttrs (_: type: type == "directory") (builtins.readDir ./hosts));
+      vars = defaultVars // import ./host/variables.nix;
     in
     {
-      nixosConfigurations = lib.genAttrs hosts mkHost;
+      # El nombre de la config lo decide host/variables.nix, no este archivo
+      nixosConfigurations.${vars.hostname} = lib.nixosSystem {
+        inherit system;
+        specialArgs = { inherit vars; };
+        modules = [
+          ./host/hardware-configuration.nix
+          ./modulos/base.nix
+          ./modulos/escritorio.nix
+          sops-nix.nixosModules.sops
+          nix-flatpak.nixosModules.nix-flatpak
+          home-manager.nixosModules.home-manager
+          {
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+            home-manager.backupFileExtension = "hm-bak";
+            home-manager.users.${vars.usuario} = import ./modulos/home.nix;
+            home-manager.extraSpecialArgs = {
+              inherit vars;
+              vscodeExts = nix-vscode-extensions.extensions.${system}.open-vsx;
+            };
+          }
+        ]
+        # disko.nix es opcional: solo se mete si existe (lo tenías en el
+        # árbol anterior; si lo quieres aquí, pon host/disko.nix igual)
+        ++ lib.optional (builtins.pathExists ./host/disko.nix) disko.nixosModules.disko
+        ++ lib.optional (builtins.pathExists ./host/disko.nix) ./host/disko.nix;
+      };
     };
 }

@@ -1,48 +1,21 @@
 { pkgs, lib, vars, vscodeExts, ... }:
 {
-  home.username = "alan";
-  home.homeDirectory = "/home/alan";
+  home.username = vars.usuario;
+  home.homeDirectory = "/home/" + vars.usuario;
   home.stateVersion = "26.05"; # NUNCA cambiar
 
+  # Paquetes de usuario
   home.packages = with pkgs; [
-    firefox
-    librewolf
-    gnome-tweaks
-    adwaita-icon-theme
-    gnome-control-center
-    croc
-    jdk21
-    lolcat
-    fortune
-    cowsay
-    brave
-    mousepad
-
-    # Apps de lenguajes especificos
-    python3
-    uv
-    deno
-
-    # Podman
-    dive
-    podman-tui
-    podman-compose
-
-    # Miniaturas
-    ffmpeg-headless
-    ffmpegthumbnailer
-    gdk-pixbuf
-    libjxl
-    webp-pixbuf-loader
-
-    # Wine / gaming
-    wineWow64Packages.stable
-    winetricks
-    protonup-qt
-    mangohud
-    gamescope
-    steam-run
-    discord
+    firefox librewolf croc jdk21 lolcat fortune cowsay brave mousepad
+    python3 uv deno renpy
+    dive podman-tui podman-compose
+    ffmpeg-headless ffmpegthumbnailer gdk-pixbuf libjxl webp-pixbuf-loader
+  ]
+  ++ lib.optionals (vars.entornoEscritorio == "gnome") [
+    gnome-tweaks adwaita-icon-theme gnome-control-center
+  ]
+  ++ lib.optionals vars.gaming [
+    wineWow64Packages.stable winetricks protonup-qt mangohud gamescope steam-run discord
   ];
 
   # Certificados ssl para herramientas instaladas mediante uv
@@ -56,23 +29,21 @@
     $DRY_RUN_CMD ${pkgs.uv}/bin/uv tool install --force gallery-dl $VERBOSE_ARG
   '';
 
-  # Config de gallery-dl: enlace en tiempo de ACTIVACIÓN (no declarativo).
+  # Enlace (en activación, no declarativo) a la config personal de gallery-dl
   home.activation.linkGalleryConfig = lib.hm.dag.entryAfter ["writeBoundary"] ''
     $DRY_RUN_CMD mkdir -p $VERBOSE_ARG "$HOME/.config/gallery-dl"
     $DRY_RUN_CMD ln -sf $VERBOSE_ARG "/etc/nixos/archivos/gallery-dl.config.json" "$HOME/.config/gallery-dl/config.json"
   '';
 
-  # Descargar galeria personal con gallery
+  # Descarga diaria de la galería personal
   systemd.user.services.galeria-gallery = {
     Unit.Description = "Descargar mi galeria 'personal' con gallery-dl";
     Service = {
       Type = "oneshot";
-      WorkingDirectory = "/home/alan/Imágenes";
+      WorkingDirectory = "/home/${vars.usuario}/Imágenes";
       ExecStart = "${pkgs.bash}/bin/bash /etc/nixos/archivos/galeria.sh";
     };
   };
-
-  # Su temporizador
   systemd.user.timers.galeria-gallery = {
     Unit.Description = "Timer para galeria-gallery";
     Timer = {
@@ -82,7 +53,7 @@
     Install.WantedBy = [ "timers.target" ];
   };
 
-  # Actualizar programas (python) instalados mediante uv
+  # Actualización semanal de las apps instaladas con uv
   systemd.user.services.uv-upgrade = {
     Unit.Description = "Actualizar todas las herramientas descargadas mediante uv";
     Service = {
@@ -90,8 +61,6 @@
       ExecStart = "${pkgs.uv}/bin/uv tool upgrade --all";
     };
   };
-
-  # Su temporizador
   systemd.user.timers.uv-upgrade = {
     Unit.Description = "Timer para actualizaciones de apps instaladas desde uv";
     Timer = {
@@ -101,7 +70,7 @@
     Install.WantedBy = [ "timers.target" ];
   };
 
-  # Vscode kike extension
+  # VSCode
   programs.vscode = {
     enable = true;
     profiles.default.extensions = with vscodeExts; [
